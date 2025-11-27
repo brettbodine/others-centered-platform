@@ -86,4 +86,4 @@ class Plugin
     }
 }
 
-Plugin::init();
+add_action('plugins_loaded', [Plugin::class, 'init']);
