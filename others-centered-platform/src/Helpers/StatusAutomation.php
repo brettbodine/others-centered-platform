@@ -55,7 +55,7 @@ class StatusAutomation
          * GEOCODE ZIP & SAVE LAT/LNG
          * -------------------------------------------------
          */
-        $zip = get_post_meta($post->ID, 'zip', true);
+        $zip = get_post_meta($post->ID, 'need_zip', true);
 
         if ($zip) {
             $coords = ZipGeocoder::geocode_zip($zip);
