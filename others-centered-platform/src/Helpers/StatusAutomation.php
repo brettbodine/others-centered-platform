@@ -27,36 +27,32 @@ class StatusAutomation
         if ($post->post_type !== 'need') {
             return;
         }
-
-        // Only care about first time it becomes "publish"
-        if ($old_status === 'publish' || $new_status !== 'publish') {
+    
+        // Only run when post is or becomes published
+        if ($new_status !== 'publish') {
             return;
         }
-
-        // If already has a status, don’t override
+    
+        // If already has a status assigned, skip automation
         $existing = wp_get_object_terms($post->ID, 'need_status', ['fields' => 'names']);
         if (! empty($existing) && ! is_wp_error($existing)) {
             return;
         }
-
-        // Allow a forced "In Review" status via post meta
+    
+        // Force "In Review" (optional)
         $manual_status = get_post_meta($post->ID, 'oc_force_status', true);
         if ($manual_status === 'In Review') {
             wp_set_object_terms($post->ID, 'In Review', 'need_status', false);
             return;
         }
-
+    
         // Default → ACTIVE
         wp_set_object_terms($post->ID, 'Active', 'need_status', false);
         update_post_meta($post->ID, 'go_live_date', current_time('mysql'));
-
-        // Send "need goes live" email to member
+    
         self::send_need_live_email($post->ID);
-
-        /**
-         * Optional scheduled promotion hook left in place
-         * if you ever need delayed activation logic.
-         */
+    
+        // Optional cron promotion (kept for legacy)
         if (! wp_next_scheduled('oc_promote_need_to_active', [$post->ID])) {
             wp_schedule_single_event(time() + MINUTE_IN_SECONDS, 'oc_promote_need_to_active', [$post->ID]);
         }
