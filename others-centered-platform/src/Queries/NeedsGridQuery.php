@@ -117,13 +117,13 @@ class NeedsGridQuery
                 $lng_delta = rad2deg($radius / $earth_radius / cos(deg2rad($lat)));
         
                 $meta[] = [
-                    'key'     => 'latitude',
+                    'key'     => 'need_lat',
                     'value'   => [$lat - $lat_delta, $lat + $lat_delta],
                     'compare' => 'BETWEEN',
                     'type'    => 'NUMERIC',
                 ];
                 $meta[] = [
-                    'key'     => 'longitude',
+                    'key'     => 'need_lng',
                     'value'   => [$lng - $lng_delta, $lng + $lng_delta],
                     'compare' => 'BETWEEN',
                     'type'    => 'NUMERIC',
