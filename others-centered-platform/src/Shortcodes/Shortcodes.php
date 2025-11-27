@@ -186,25 +186,6 @@ class Shortcodes
     }
 
 
-
-    /**
-     * -----------------------------------------------------
-     * [oc_my_link_rating]
-     * Displays the user's personal Link Rating score.
-     * -----------------------------------------------------
-     */
-    public static function my_link_rating(): string
-    {
-        if (!is_user_logged_in()) {
-            return '<p>Please log in to see your link rating.</p>';
-        }
-
-        return \OthersCentered\Platform\Dashboard\LinkRating::render_for_user(
-            get_current_user_id()
-        );
-    }
-
-
     /**
      * -----------------------------------------------------
      * [oc_how_it_works]
