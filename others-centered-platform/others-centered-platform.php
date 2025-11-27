@@ -24,32 +24,19 @@ define( 'OCP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
 /**
  * ---------------------------------------------------------
- * COMPOSER AUTOLOAD (optional) + FALLBACK AUTOLOADER
+ * COMPOSER AUTOLOAD (if present)
  * ---------------------------------------------------------
  */
+$composer_autoload = OCP_PLUGIN_DIR . 'vendor/autoload.php';
 
-// Try Composer autoload if present (e.g. in local dev)
-$autoload = OCP_PLUGIN_DIR . 'vendor/autoload.php';
-
-if ( file_exists( $autoload ) ) {
-    require_once $autoload;
-} else {
-    // Show a notice in admin so you know Composer isn't installed,
-    // but DO NOT bail out; we'll use our own autoloader instead.
-    add_action( 'admin_notices', function () {
-        if ( current_user_can( 'activate_plugins' ) ) {
-            echo '<div class="notice notice-warning"><p>';
-            echo esc_html__(
-                'Others Centered Platform: Composer autoloader not found. Using built-in autoloader instead.',
-                'others-centered-platform'
-            );
-            echo '</p></div>';
-        }
-    } );
+if ( file_exists( $composer_autoload ) ) {
+    require_once $composer_autoload;
 }
 
 /**
- * Simple PSR-4-style autoloader for the OthersCentered\Platform namespace.
+ * ---------------------------------------------------------
+ * FALLBACK PSR-4 AUTOLOADER (always available)
+ * ---------------------------------------------------------
  */
 spl_autoload_register( function ( $class ) {
 
@@ -58,13 +45,11 @@ spl_autoload_register( function ( $class ) {
 
     $len = strlen( $prefix );
     if ( strncmp( $prefix, $class, $len ) !== 0 ) {
-        // Not one of ours
-        return;
+        return; // Not one of ours
     }
 
     $relative_class = substr( $class, $len );
 
-    // Convert namespace separators to directory separators
     $relative_path = str_replace( '\\', DIRECTORY_SEPARATOR, $relative_class ) . '.php';
 
     $file = $base_dir . $relative_path;
@@ -87,8 +72,7 @@ add_action( 'plugins_loaded', function () {
 
 /**
  * ---------------------------------------------------------
- * ACTIVATION
- * Only register CPTs + flush rewrites
+ * ACTIVATION (register CPTs + flush rewrites)
  * ---------------------------------------------------------
  */
 register_activation_hook( __FILE__, function () {
