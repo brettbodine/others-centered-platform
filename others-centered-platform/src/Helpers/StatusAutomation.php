@@ -3,6 +3,7 @@
 namespace OthersCentered\Platform\Helpers;
 
 use OthersCentered\Platform\Emails\Templates;
+use OthersCentered\Platform\Geocoding\ZipGeocoder;
 
 class StatusAutomation
 {
@@ -11,57 +12,79 @@ class StatusAutomation
      */
     public static function register(): void
     {
-        // When status changes (draft → publish)
+        // Fired when a Need transitions status (admin clicks publish)
         add_action('transition_post_status', [self::class, 'on_publish'], 10, 3);
 
-        // Cron event for auto-promotion
+        // Cron event for auto-promotion New → Active
         add_action('oc_promote_need_to_active', [self::class, 'promote'], 10, 1);
     }
 
     /**
-     * Handle post being published (draft → publish).
-     * Auto-assign statuses & timestamps.
+     * Handle a Need post being published.
+     * Converts:
+     *   In Review → New
+     * Then geocodes the ZIP and schedules promotion to Active.
      */
     public static function on_publish(string $new_status, string $old_status, \WP_Post $post): void
     {
+        // Only handle Need posts
         if ($post->post_type !== 'need') {
             return;
         }
-    
-        // Only run when post is or becomes published
+
+        // Only act when post becomes or is published
         if ($new_status !== 'publish') {
             return;
         }
-    
-        // If already has a status assigned, skip automation
+
+        // Get current status (APC sets "In Review")
         $existing = wp_get_object_terms($post->ID, 'need_status', ['fields' => 'names']);
-        if (! empty($existing) && ! is_wp_error($existing)) {
+        $current_status = strtolower($existing[0] ?? '');
+
+        // Only override if current status is "In Review"
+        if ($current_status !== 'in review') {
             return;
         }
-    
-        // Force "In Review" (optional)
-        $manual_status = get_post_meta($post->ID, 'oc_force_status', true);
-        if ($manual_status === 'In Review') {
-            wp_set_object_terms($post->ID, 'In Review', 'need_status', false);
-            return;
-        }
-    
-        // Default → ACTIVE
-        wp_set_object_terms($post->ID, 'Active', 'need_status', false);
+
+        // Set to New when published
+        wp_set_object_terms($post->ID, 'New', 'need_status', false);
         update_post_meta($post->ID, 'go_live_date', current_time('mysql'));
-    
+
+        /**
+         * -------------------------------------------------
+         * GEOCODE ZIP & SAVE LAT/LNG
+         * -------------------------------------------------
+         */
+        $zip = get_post_meta($post->ID, 'zip', true);
+
+        if ($zip) {
+            $coords = ZipGeocoder::geocode_zip($zip);
+
+            if ($coords) {
+                update_post_meta($post->ID, 'need_lat', $coords['lat']);
+                update_post_meta($post->ID, 'need_lng', $coords['lng']);
+            } else {
+                error_log("OC Geocode failed for Need {$post->ID} using ZIP {$zip}");
+            }
+        }
+
+        // Notify member
         self::send_need_live_email($post->ID);
-    
-        // Optional cron promotion (kept for legacy)
+
+        /**
+         * -------------------------------------------------
+         * SCHEDULE NEW → ACTIVE PROMOTION (7 DAYS)
+         * -------------------------------------------------
+         */
+        $seven_days = 7 * DAY_IN_SECONDS;
+
         if (! wp_next_scheduled('oc_promote_need_to_active', [$post->ID])) {
-            wp_schedule_single_event(time() + MINUTE_IN_SECONDS, 'oc_promote_need_to_active', [$post->ID]);
+            wp_schedule_single_event(time() + $seven_days, 'oc_promote_need_to_active', [$post->ID]);
         }
     }
 
     /**
-     * Promote a need to active (cron safe).
-     * This handles:
-     * - In Review  → Active
+     * Promote New → Active (cron fired after 7 days).
      */
     public static function promote(int $post_id): void
     {
@@ -73,23 +96,20 @@ class StatusAutomation
         $current = wp_get_object_terms($post_id, 'need_status', ['fields' => 'names']);
         $status  = strtolower($current[0] ?? '');
 
-        // Already active → nothing to do
-        if ($status === 'active') {
+        // Only promote if currently "New"
+        if ($status !== 'new') {
             return;
         }
 
-        // Promote In Review → Active
-        if ($status === 'in review') {
-            wp_set_object_terms($post_id, 'Active', 'need_status', false);
-            update_post_meta($post_id, 'go_live_date', current_time('mysql'));
+        wp_set_object_terms($post_id, 'Active', 'need_status', false);
+        update_post_meta($post_id, 'activated_date', current_time('mysql'));
 
-            // Send "need goes live" email to member
-            self::send_need_live_email($post_id);
-        }
+        // Optional: Notify user again
+        self::send_need_live_email($post_id);
     }
 
     /**
-     * Send "need_live_member" email to the member associated with a need.
+     * Send "need_live_member" email to the member associated with a Need.
      */
     protected static function send_need_live_email(int $post_id): void
     {
@@ -98,9 +118,8 @@ class StatusAutomation
             return;
         }
 
-        // Prefer the post author as the member
         $member_email = '';
-        $author_id    = (int) $post->post_author;
+        $author_id = (int) $post->post_author;
 
         if ($author_id) {
             $user = get_userdata($author_id);
@@ -109,7 +128,6 @@ class StatusAutomation
             }
         }
 
-        // Fallback to a custom meta field if you ever store it
         if (! $member_email) {
             $member_email = (string) get_post_meta($post_id, 'member_email', true);
         }
