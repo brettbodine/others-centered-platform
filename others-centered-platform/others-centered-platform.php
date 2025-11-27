@@ -24,26 +24,55 @@ define( 'OCP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
 /**
  * ---------------------------------------------------------
- * COMPOSER AUTOLOAD
+ * COMPOSER AUTOLOAD (optional) + FALLBACK AUTOLOADER
  * ---------------------------------------------------------
  */
+
+// Try Composer autoload if present (e.g. in local dev)
 $autoload = OCP_PLUGIN_DIR . 'vendor/autoload.php';
 
 if ( file_exists( $autoload ) ) {
     require_once $autoload;
 } else {
+    // Show a notice in admin so you know Composer isn't installed,
+    // but DO NOT bail out; we'll use our own autoloader instead.
     add_action( 'admin_notices', function () {
         if ( current_user_can( 'activate_plugins' ) ) {
-            echo '<div class="notice notice-error"><p>';
+            echo '<div class="notice notice-warning"><p>';
             echo esc_html__(
-                'Others Centered Platform: Composer autoloader not found. Run "composer install" in the plugin directory.',
+                'Others Centered Platform: Composer autoloader not found. Using built-in autoloader instead.',
                 'others-centered-platform'
             );
             echo '</p></div>';
         }
-    });
-    return;
+    } );
 }
+
+/**
+ * Simple PSR-4-style autoloader for the OthersCentered\Platform namespace.
+ */
+spl_autoload_register( function ( $class ) {
+
+    $prefix   = 'OthersCentered\\Platform\\';
+    $base_dir = OCP_PLUGIN_DIR . 'src/';
+
+    $len = strlen( $prefix );
+    if ( strncmp( $prefix, $class, $len ) !== 0 ) {
+        // Not one of ours
+        return;
+    }
+
+    $relative_class = substr( $class, $len );
+
+    // Convert namespace separators to directory separators
+    $relative_path = str_replace( '\\', DIRECTORY_SEPARATOR, $relative_class ) . '.php';
+
+    $file = $base_dir . $relative_path;
+
+    if ( file_exists( $file ) ) {
+        require_once $file;
+    }
+} );
 
 /**
  * ---------------------------------------------------------
@@ -51,8 +80,10 @@ if ( file_exists( $autoload ) ) {
  * ---------------------------------------------------------
  */
 add_action( 'plugins_loaded', function () {
-    \OthersCentered\Platform\Plugin::init();
-});
+    if ( class_exists( '\OthersCentered\Platform\Plugin' ) ) {
+        \OthersCentered\Platform\Plugin::init();
+    }
+} );
 
 /**
  * ---------------------------------------------------------
@@ -61,9 +92,11 @@ add_action( 'plugins_loaded', function () {
  * ---------------------------------------------------------
  */
 register_activation_hook( __FILE__, function () {
-    \OthersCentered\Platform\PostTypes\NeedPostType::register();
+    if ( class_exists( '\OthersCentered\Platform\PostTypes\NeedPostType' ) ) {
+        \OthersCentered\Platform\PostTypes\NeedPostType::register();
+    }
     flush_rewrite_rules();
-});
+} );
 
 /**
  * ---------------------------------------------------------
@@ -72,4 +105,4 @@ register_activation_hook( __FILE__, function () {
  */
 register_deactivation_hook( __FILE__, function () {
     flush_rewrite_rules();
-});
+} );
