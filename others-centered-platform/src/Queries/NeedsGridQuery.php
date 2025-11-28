@@ -245,6 +245,12 @@ class NeedsGridQuery
             $q->set('meta_query', $meta);
         }
 
+        // Disable caching so Elementor re-runs the radius query
+        $q->set('cache_results', false);
+        $q->set('no_found_rows', true);
+        $q->set('update_post_meta_cache', false);
+        $q->set('update_post_term_cache', false);
+
         /**
          * Default sort: soonest due date first
          */
