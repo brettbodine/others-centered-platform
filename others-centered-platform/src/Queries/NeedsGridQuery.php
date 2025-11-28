@@ -120,13 +120,13 @@ class NeedsGridQuery
                     'key'     => 'need_lat',
                     'value'   => [$lat - $lat_delta, $lat + $lat_delta],
                     'compare' => 'BETWEEN',
-                    'type'    => 'NUMERIC',
+                    'type'    => 'DECIMAL(10,6)',
                 ];
                 $meta[] = [
                     'key'     => 'need_lng',
                     'value'   => [$lng - $lng_delta, $lng + $lng_delta],
                     'compare' => 'BETWEEN',
-                    'type'    => 'NUMERIC',
+                    'type'    => 'DECIMAL(10,6)',
                 ];
             }
         
@@ -244,12 +244,12 @@ class NeedsGridQuery
         if (count($meta) > 1) {
             $q->set('meta_query', $meta);
         }
-
+        
         // Disable caching so Elementor re-runs the radius query
-        $q->set('cache_results', false);
-        $q->set('no_found_rows', true);
-        $q->set('update_post_meta_cache', false);
-        $q->set('update_post_term_cache', false);
+        //$q->set('cache_results', false);
+        //$q->set('no_found_rows', true);
+        //$q->set('update_post_meta_cache', false);
+        //$q->set('update_post_term_cache', false);
 
         /**
          * Default sort: soonest due date first
