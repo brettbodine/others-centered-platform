@@ -132,7 +132,7 @@ class NeedsGridQuery
         
         } elseif ($zip) {
             $meta[] = [
-                'key'     => 'zip',
+                'key'     => 'need_zip',
                 'value'   => $zip,
                 'compare' => '=',
             ];
