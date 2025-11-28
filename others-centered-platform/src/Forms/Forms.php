@@ -42,6 +42,7 @@ class Forms
      */
     public static function after_need_created($post_id, $feed, $entry, $form): void
     {
+        
         if ((int)$form['id'] !== self::FORM_ID_ASK || get_post_type($post_id) !== 'need') {
             return;
         }
@@ -76,8 +77,9 @@ class Forms
             $coords = self::geocode_zip($zip);
 
             if ($coords) {
-                update_post_meta($post_id, 'need_lat', $coords['lat']);
-                update_post_meta($post_id, 'need_lng', $coords['lng']);
+                update_post_meta($post_id, 'need_lat', floatval($coords['lat']));
+                update_post_meta($post_id, 'need_lng', floatval($coords['lng']));
+
                 error_log("OC APC Geocode SUCCESS for Need #{$post_id} ZIP={$zip}");
             } else {
                 error_log("OC APC Geocode FAILED for Need #{$post_id} ZIP={$zip}");
