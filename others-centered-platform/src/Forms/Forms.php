@@ -94,12 +94,17 @@ class Forms
         $to   = get_option('admin_email');
         $edit = get_edit_post_link($post_id);
 
-        wp_mail(
-            $to,
-            'New Need submitted (Pending Review)',
-            "A new Need is awaiting review:\n\nTitle: " . get_the_title($post_id) . "\nEdit: $edit",
-            ['Content-Type: text/plain; charset=UTF-8']
+        use OthersCentered\Platform\Emails\Templates;
+
+        Templates::send(
+            'admin_new_need',
+            get_option('admin_email'),
+            [
+                '{need_title}' => get_the_title($post_id),
+                '{edit_link}'  => get_edit_post_link($post_id),
+            ]
         );
+
     }
 
     /**
