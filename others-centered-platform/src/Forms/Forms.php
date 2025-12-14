@@ -60,7 +60,7 @@ class Forms
         /**
          * Force initial status
          */
-        wp_set_object_terms($post_id, 'In Review', 'need_status’, false);
+        wp_set_object_terms($post_id, 'In Review', 'need_status', false);
 
         /**
          * Auto-title if missing
