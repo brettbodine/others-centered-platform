@@ -60,7 +60,7 @@ class Forms
         /**
          * Force initial status
          */
-        wp_set_object_terms($post_id, 'In Review', 'need_status', false);
+        wp_set_object_terms($post_id, 'In Review', 'need_status’, false);
 
         /**
          * Auto-title if missing
@@ -89,13 +89,8 @@ class Forms
         }
 
         /**
-         * Notify intake team
+         * Admin intake email (now centralized)
          */
-        $to   = get_option('admin_email');
-        $edit = get_edit_post_link($post_id);
-
-        use OthersCentered\Platform\Emails\Templates;
-
         Templates::send(
             'admin_new_need',
             get_option('admin_email'),
@@ -104,7 +99,6 @@ class Forms
                 '{edit_link}'  => get_edit_post_link($post_id),
             ]
         );
-
     }
 
     /**
@@ -123,14 +117,21 @@ class Forms
         $lat = get_post_meta($post_id, 'need_lat', true);
         $lng = get_post_meta($post_id, 'need_lng', true);
 
-        if ($lat && $lng) return;
+        // Only skip if we already have real coordinates
+        if (
+            is_numeric($lat) && is_numeric($lng) &&
+            abs((float) $lat) > 0.0001 &&
+            abs((float) $lng) > 0.0001
+        ) {
+            return;
+        }
 
         self::set_need_coordinates($post_id, $zip, 'SAVE_POST');
     }
 
     /**
      * ------------------------------------------------------
-     * CENTRALIZED COORDINATE SETTER
+     * CENTRALIZED COORDINATE SETTER (ACF-safe)
      * ------------------------------------------------------
      */
     protected static function set_need_coordinates(int $post_id, string $zip, string $context): void
@@ -143,12 +144,12 @@ class Forms
         }
 
         if (function_exists('update_field')) {
-    update_field('need_lat', $coords['lat'], $post_id);
-    update_field('need_lng', $coords['lng'], $post_id);
-} else {
-    update_post_meta($post_id, 'need_lat', $coords['lat']);
-    update_post_meta($post_id, 'need_lng', $coords['lng']);
-}
+            update_field('need_lat', $coords['lat'], $post_id);
+            update_field('need_lng', $coords['lng'], $post_id);
+        } else {
+            update_post_meta($post_id, 'need_lat', $coords['lat']);
+            update_post_meta($post_id, 'need_lng', $coords['lng']);
+        }
 
         error_log("OC {$context} Geocode SUCCESS for Need #{$post_id} ZIP={$zip}");
     }
