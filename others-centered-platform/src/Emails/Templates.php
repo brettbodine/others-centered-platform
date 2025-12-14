@@ -10,6 +10,15 @@ class Templates
     public static function config(): array
     {
         return [
+            'admin_new_need' => [
+                'label'   => 'Admin – New Need Submitted',
+                'subject' => 'New Need submitted (Pending Review)',
+                'body'    =>
+                    "A new Need is awaiting review.\n\n" .
+                    "Title: {need_title}\n\n" .
+                    "Edit:\n{edit_link}\n",
+            ],
+     
             'need_live_member' => [
                 'label'   => 'Need goes live (Member)',
                 'subject' => 'Your need is now live on Others Centered',
