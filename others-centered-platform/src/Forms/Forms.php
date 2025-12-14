@@ -137,8 +137,13 @@ class Forms
             return;
         }
 
-        update_post_meta($post_id, 'need_lat', $coords['lat']);
-        update_post_meta($post_id, 'need_lng', $coords['lng']);
+        if (function_exists('update_field')) {
+    update_field('need_lat', $coords['lat'], $post_id);
+    update_field('need_lng', $coords['lng'], $post_id);
+} else {
+    update_post_meta($post_id, 'need_lat', $coords['lat']);
+    update_post_meta($post_id, 'need_lng', $coords['lng']);
+}
 
         error_log("OC {$context} Geocode SUCCESS for Need #{$post_id} ZIP={$zip}");
     }
