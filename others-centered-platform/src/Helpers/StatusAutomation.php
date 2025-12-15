@@ -9,19 +9,19 @@ class StatusAutomation
 {
     public static function register(): void
     {
-        // When post is published
+        // Need published
         add_action('transition_post_status', [self::class, 'on_publish'], 10, 3);
 
-        // When taxonomy terms change
-        add_action('set_object_terms', [self::class, 'on_status_change'], 10, 6);
+        // Taxonomy status changes
+        add_action('set_object_terms', [self::class, 'on_status_set'], 10, 6);
 
-        // Cron promotion: New → Active (no email)
+        // Cron: New → Active
         add_action('oc_promote_new_need', [self::class, 'promote_new_to_active']);
     }
 
     /**
      * -----------------------------------------------------
-     * Need is published → goes live
+     * When Need is published → goes live
      * -----------------------------------------------------
      */
     public static function on_publish(string $new_status, string $old_status, WP_Post $post): void
@@ -34,12 +34,12 @@ class StatusAutomation
             return;
         }
 
-        // Prevent duplicate send
+        // Prevent duplicate "live" email
         if (get_post_meta($post->ID, 'go_live_date', true)) {
             return;
         }
 
-        // Normalize taxonomy
+        // Normalize initial status
         $terms = wp_get_object_terms($post->ID, 'need_status', ['fields' => 'names']);
         $current = strtolower($terms[0] ?? '');
 
@@ -47,10 +47,12 @@ class StatusAutomation
             wp_set_object_terms($post->ID, 'New', 'need_status', false);
         }
 
+        // Send live email
         self::send_need_live_email($post->ID);
 
         update_post_meta($post->ID, 'go_live_date', current_time('mysql'));
 
+        // Schedule promotion
         if (!wp_next_scheduled('oc_promote_new_need', [$post->ID])) {
             wp_schedule_single_event(time() + (7 * DAY_IN_SECONDS), 'oc_promote_new_need', [$post->ID]);
         }
@@ -58,10 +60,10 @@ class StatusAutomation
 
     /**
      * -----------------------------------------------------
-     * NEED STATUS CHANGES (taxonomy)
+     * When need_status taxonomy is set
      * -----------------------------------------------------
      */
-    public static function on_status_change(
+    public static function on_status_set(
         int $object_id,
         array $terms,
         array $tt_ids,
@@ -78,50 +80,45 @@ class StatusAutomation
             return;
         }
 
+        // Normalize new status
         $new_terms = wp_get_object_terms($object_id, 'need_status', ['fields' => 'names']);
-        $new = strtolower($new_terms[0] ?? '');
+        $status = strtolower($new_terms[0] ?? '');
 
-        $old_terms = wp_get_object_terms($object_id, 'need_status', [
-            'fields' => 'names',
-            'orderby' => 'term_id',
-            'order' => 'ASC',
-        ]);
-
-        $old = strtolower($old_terms[0] ?? '');
-
-        // MATCHED
-        if ($new === 'matched' && $old !== 'matched') {
-            self::handle_matched($object_id);
+        /**
+         * CLAIMED  → MATCHED EMAILS
+         */
+        if ($status === 'claimed') {
+            self::handle_claimed($object_id);
+            return;
         }
 
-        // CLAIMED (treated as matched for email purposes)
-        if ($new === 'claimed' && $old !== 'claimed') {
-            self::handle_matched($object_id);
-        }
-
-        // FULFILLED / MET
-        if (in_array($new, ['fulfilled', 'met'], true)) {
-            self::handle_fulfilled($object_id);
+        /**
+         * MET → FULFILLED EMAILS
+         */
+        if ($status === 'met') {
+            self::handle_met($object_id);
+            return;
         }
     }
 
     /**
      * -----------------------------------------------------
-     * MATCHED HANDLER
+     * CLAIMED HANDLER (replaces "matched")
      * -----------------------------------------------------
      */
-    protected static function handle_matched(int $post_id): void
+    protected static function handle_claimed(int $post_id): void
     {
-        if (get_post_meta($post_id, 'email_matched_sent', true)) {
+        if (get_post_meta($post_id, 'email_claimed_sent', true)) {
             return;
         }
 
         $post = get_post($post_id);
         if (!$post) return;
 
-        $user = get_userdata($post->post_author);
-        if ($user && $user->user_email) {
-            Templates::send('matched_member', $user->user_email, [
+        $member = get_userdata($post->post_author);
+
+        if ($member && $member->user_email) {
+            Templates::send('matched_member', $member->user_email, [
                 '{need_title}' => $post->post_title,
                 '{need_link}'  => get_permalink($post_id),
                 '{need_id}'    => $post_id,
@@ -134,69 +131,10 @@ class StatusAutomation
             '{need_id}'    => $post_id,
         ]);
 
-        update_post_meta($post_id, 'email_matched_sent', 1);
+        update_post_meta($post_id, 'email_claimed_sent', 1);
     }
 
     /**
      * -----------------------------------------------------
-     * FULFILLED HANDLER
+     * MET HANDLER (replaces "fulfilled")
      * -----------------------------------------------------
-     */
-    protected static function handle_fulfilled(int $post_id): void
-    {
-        if (get_post_meta($post_id, 'email_fulfilled_sent', true)) {
-            return;
-        }
-
-        $post = get_post($post_id);
-        if (!$post) return;
-
-        Templates::send('admin_fulfilled', get_option('admin_email'), [
-            '{need_title}' => $post->post_title,
-            '{edit_link}'  => get_edit_post_link($post_id),
-            '{need_id}'    => $post_id,
-        ]);
-
-        update_post_meta($post_id, 'email_fulfilled_sent', 1);
-    }
-
-    /**
-     * -----------------------------------------------------
-     * CRON: New → Active
-     * -----------------------------------------------------
-     */
-    public static function promote_new_to_active(int $post_id): void
-    {
-        $post = get_post($post_id);
-        if (!$post || $post->post_type !== 'need') {
-            return;
-        }
-
-        $terms = wp_get_object_terms($post_id, 'need_status', ['fields' => 'names']);
-        $current = strtolower($terms[0] ?? '');
-
-        if ($current === 'new') {
-            wp_set_object_terms($post_id, 'Active', 'need_status', false);
-        }
-    }
-
-    /**
-     * -----------------------------------------------------
-     * NEED LIVE EMAIL
-     * -----------------------------------------------------
-     */
-    protected static function send_need_live_email(int $post_id): void
-    {
-        $post = get_post($post_id);
-        if (!$post) return;
-
-        $user = get_userdata($post->post_author);
-        if (!$user || empty($user->user_email)) return;
-
-        Templates::send('need_live_member', $user->user_email, [
-            '{need_title}' => $post->post_title,
-            '{need_link}'  => get_permalink($post_id),
-            '{need_id}'    => $post_id,
-        ]);
-    }
-}
